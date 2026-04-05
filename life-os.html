@@ -119,17 +119,17 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 .hday.today-col{border-color:var(--b2)}
 
 /* Calendar */
-.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-top:8px}
-.cal-head{text-align:center;font-size:10px;color:var(--muted);font-family:var(--mono);padding:4px 0}
-.cal-day{min-height:52px;border-radius:7px;font-size:12px;cursor:pointer;transition:background .12s;position:relative;padding:4px 5px;display:flex;flex-direction:column;align-items:flex-start;gap:2px;border:1px solid transparent}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-top:8px}
+.cal-head{text-align:center;font-size:11px;color:var(--muted);font-family:var(--mono);padding:6px 0;font-weight:500}
+.cal-day{min-height:90px;border-radius:8px;font-size:12px;cursor:pointer;transition:all .12s;position:relative;padding:6px 7px;display:flex;flex-direction:column;align-items:flex-start;gap:3px;border:1px solid transparent}
 .cal-day:hover{background:var(--s2);border-color:var(--b1)}
-.cal-day.today{background:rgba(200,242,126,0.1);border-color:var(--g)}
-.cal-day.today .cal-day-num{background:var(--g);color:#0f0f11;font-weight:700;border-radius:4px;padding:1px 5px}
-.cal-day.other-month{opacity:.3}
-.cal-day-num{font-size:12px;font-weight:500;line-height:1.4}
-.cal-ev-chip{font-size:9px;font-family:var(--mono);padding:1px 5px;border-radius:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%;background:rgba(126,184,242,0.2);color:var(--b);line-height:1.5}
-.cal-ev-chip.allday{background:rgba(176,126,242,0.2);color:var(--p)}
-.cal-more{font-size:9px;color:var(--muted);font-family:var(--mono);padding-left:2px}
+.cal-day.today{background:rgba(200,242,126,0.08);border-color:rgba(200,242,126,0.4)}
+.cal-day.today .cal-day-num{background:var(--g);color:#0f0f11;font-weight:700;border-radius:5px;padding:2px 7px}
+.cal-day.other-month{opacity:.25}
+.cal-day-num{font-size:13px;font-weight:500;line-height:1.4;margin-bottom:1px}
+.cal-ev-chip{font-size:10px;font-family:var(--mono);padding:2px 6px;border-radius:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%;background:rgba(126,184,242,0.18);color:var(--b);line-height:1.5}
+.cal-ev-chip.allday{background:rgba(176,126,242,0.18);color:var(--p)}
+.cal-more{font-size:9px;color:var(--muted);font-family:var(--mono);padding-left:3px;margin-top:1px}
 
 /* Forms */
 .form-row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
@@ -397,15 +397,19 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 <!-- ═══ CALENDAR ═══ -->
 <div class="page" id="page-calendar">
   <div class="ph"><div><div class="pt">Calendar</div><div class="ps">monthly view</div></div></div>
-  <div class="g2">
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-        <button class="btn-ghost" style="padding:5px 12px" onclick="calNav(-1)">‹</button>
-        <span id="cal-month-label" style="font-size:14px;font-weight:500"></span>
-        <button class="btn-ghost" style="padding:5px 12px" onclick="calNav(1)">›</button>
-      </div>
-      <div class="cal-grid" id="cal-grid"></div>
+
+  <!-- Full-width calendar grid -->
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <button class="btn-ghost" style="padding:6px 16px;font-size:18px" onclick="calNav(-1)">‹</button>
+      <span id="cal-month-label" style="font-size:17px;font-weight:600"></span>
+      <button class="btn-ghost" style="padding:6px 16px;font-size:18px" onclick="calNav(1)">›</button>
     </div>
+    <div class="cal-grid" id="cal-grid"></div>
+  </div>
+
+  <!-- Add event + upcoming events side by side -->
+  <div class="g2">
     <div class="card">
       <div class="card-title"><div class="cdot" style="background:var(--p)"></div>Add event</div>
       <div style="display:flex;flex-direction:column;gap:9px">
@@ -425,10 +429,11 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
             <option value="1week">Remind 1 week before</option>
           </select>
         </div>
-        <div id="cal-time-hint" style="display:none;font-size:11px;color:var(--muted);font-family:var(--mono)">enter a specific time above</div>
         <button class="btn" onclick="addCalEvent()" style="align-self:flex-start">Add event</button>
       </div>
-      <div class="card-title" style="margin-top:16px;margin-bottom:8px"><div class="cdot" style="background:var(--p)"></div>Upcoming events</div>
+    </div>
+    <div class="card">
+      <div class="card-title"><div class="cdot" style="background:var(--p)"></div>Upcoming events</div>
       <div id="cal-events" class="sl"></div>
     </div>
   </div>
