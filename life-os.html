@@ -403,17 +403,18 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
           <input class="inp" id="cal-date" type="date" style="width:148px">
         </div>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;flex-shrink:0">
-            <input type="checkbox" id="cal-allday" checked onchange="toggleCalTime()" style="width:15px;height:15px;cursor:pointer">
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;flex-shrink:0;background:var(--s2);border:1px solid var(--b1);border-radius:7px;padding:7px 11px">
+            <input type="checkbox" id="cal-allday" checked onchange="toggleCalTime()" style="width:15px;height:15px;cursor:pointer;accent-color:var(--g)">
             <span style="color:var(--muted)">All day</span>
           </label>
-          <input class="inp" id="cal-time" type="time" style="width:120px;display:none">
+          <input class="inp" id="cal-time" type="time" style="width:130px;display:none">
           <select class="inp" id="cal-reminder" style="flex:1;min-width:140px">
             <option value="">No reminder</option>
             <option value="1day">Remind 1 day before</option>
             <option value="1week">Remind 1 week before</option>
           </select>
         </div>
+        <div id="cal-time-hint" style="display:none;font-size:11px;color:var(--muted);font-family:var(--mono)">enter a specific time above</div>
         <button class="btn" onclick="addCalEvent()" style="align-self:flex-start">Add event</button>
       </div>
       <div class="card-title" style="margin-top:16px;margin-bottom:8px"><div class="cdot" style="background:var(--p)"></div>Upcoming events</div>
@@ -936,6 +937,11 @@ renderChoreList('dash-chores');
 // ═══════════════════════════════════════════════════════
 // SCHEDULE
 // ═══════════════════════════════════════════════════════
+const CAL_KEY = 'lo_calendar';
+let calOffset = 0;
+let calEvents = get(CAL_KEY) || [];
+function saveCalEvents() { set(CAL_KEY, calEvents); }
+
 const SCHED_KEY = 'lo_schedule';
 const SCHED_COLORS = ['#c8f27e','#7eb8f2','#f2c97e','#b07ef2','#7ef2d8','#f27eb8'];
 let schedItems = get(SCHED_KEY) || [
@@ -1009,10 +1015,6 @@ renderScheduleList();
 // ═══════════════════════════════════════════════════════
 // CALENDAR
 // ═══════════════════════════════════════════════════════
-const CAL_KEY = 'lo_calendar';
-let calOffset = 0;
-let calEvents = get(CAL_KEY) || [];
-function saveCalEvents() { set(CAL_KEY, calEvents); }
 
 // Set default date to today
 const calDateEl = document.getElementById('cal-date');
@@ -1020,7 +1022,16 @@ if (calDateEl) calDateEl.value = TODAY;
 
 window.toggleCalTime = function() {
   const allDay = document.getElementById('cal-allday').checked;
-  document.getElementById('cal-time').style.display = allDay ? 'none' : 'inline-block';
+  const timeEl = document.getElementById('cal-time');
+  const hintEl = document.getElementById('cal-time-hint');
+  if (allDay) {
+    timeEl.style.display = 'none';
+    if (hintEl) hintEl.style.display = 'none';
+  } else {
+    timeEl.style.display = 'inline-block';
+    if (hintEl) hintEl.style.display = 'block';
+    timeEl.focus();
+  }
 };
 
 function renderCalendar() {
