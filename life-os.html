@@ -1184,6 +1184,12 @@ const CAL_KEY = 'lo_calendar';
 let calOffset = 0;
 let calEvents = lsGet(CAL_KEY) || [];
 function saveCalEvents() { lsSet(CAL_KEY, calEvents); }
+// show/hide time input based on all-day checkbox
+window.toggleCalTime = function() {
+  const allDay = document.getElementById('cal-allday').checked;
+  document.getElementById('cal-time').style.display = allDay ? 'none' : 'inline-block';
+};
+
 function renderCal() {
   const d = new Date(NOW.getFullYear(), NOW.getMonth() + calOffset, 1);
   const year = d.getFullYear(), month = d.getMonth();
@@ -1198,27 +1204,60 @@ function renderCal() {
     const ds = year + '-' + dm + '-' + dd;
     const isToday = calOffset === 0 && i === NOW.getDate();
     const hasEv = calEvents.some(e => e.date === ds);
-    grid.innerHTML += '<div class="cday' + (isToday?' today':'') + (hasEv?' has-event':'') + '" onclick="pickCalDay(\'' + ds + '\')">' + i + '</div>';
+    grid.innerHTML += '<div class="cday' + (isToday?' today':'') + (hasEv?' has-event':'') + '" data-date="' + ds + '" onclick="pickCalDay(this.dataset.date)">' + i + '</div>';
   }
   renderCalEvents();
+  renderDashSchedule();
 }
+
 function renderCalEvents() {
   const el = document.getElementById('cal-events');
   if (!calEvents.length) { el.innerHTML = '<div class="empty">No events yet</div>'; return; }
-  el.innerHTML = calEvents.slice().sort((a,b)=>a.date.localeCompare(b.date)).map((e,_) => {
+  const sorted = calEvents.slice().sort((a,b) => {
+    const at = a.date + (a.time||'00:00');
+    const bt = b.date + (b.time||'00:00');
+    return at.localeCompare(bt);
+  });
+  el.innerHTML = sorted.map(e => {
     const i = calEvents.indexOf(e);
-    return '<div class="frow"><div><div class="flabel">' + e.title + '</div><div class="fcat">' + e.date + '</div></div><span class="del" onclick="delCalEvent(' + i + ')">&#x2715;</span></div>';
+    const isPast = e.date < TODAY;
+    const isToday2 = e.date === TODAY;
+    const timeStr = e.allDay ? 'all day' : (e.time || '');
+    const reminderLabel = {'':{}, '1day':'🔔 1 day before', '1week':'🔔 1 week before'}[e.reminder||''] || '';
+    return '<div class="frow" style="' + (isPast?'opacity:0.45':'') + '">'
+      + '<div style="flex:1">'
+      + '<div class="flabel">' + e.title
+      + (isToday2 ? ' <span style="font-size:10px;background:rgba(200,242,126,0.15);color:var(--a);padding:1px 7px;border-radius:4px;font-family:var(--mono)">today</span>' : '')
+      + '</div>'
+      + '<div class="fcat">' + e.date
+      + (timeStr ? ' · ' + timeStr : '')
+      + (reminderLabel ? ' · ' + reminderLabel : '')
+      + '</div></div>'
+      + '<span class="del" onclick="delCalEvent(' + i + ')">&#x2715;</span></div>';
   }).join('');
 }
+
 window.calNav = function(dir) { calOffset += dir; renderCal(); };
 window.pickCalDay = function(date) { document.getElementById('cal-date').value = date; };
+
 window.addCalEvent = function() {
   const date = document.getElementById('cal-date').value;
   const title = document.getElementById('cal-event').value.trim();
-  if (!date || !title) return;
-  calEvents.push({date,title}); saveCalEvents(); renderCal(); toast('Event added ✓');
+  if (!date || !title) { toast('Please fill in date and event name', true); return; }
+  const allDay = document.getElementById('cal-allday').checked;
+  const time = allDay ? null : (document.getElementById('cal-time').value || null);
+  const reminder = document.getElementById('cal-reminder').value || null;
+  calEvents.push({ date, title, allDay, time, reminder });
+  saveCalEvents();
+  renderCal();
+  toast('Event added ✓');
   document.getElementById('cal-event').value = '';
+  document.getElementById('cal-time').value = '';
+  document.getElementById('cal-allday').checked = true;
+  document.getElementById('cal-time').style.display = 'none';
+  document.getElementById('cal-reminder').value = '';
 };
+
 window.delCalEvent = function(i) { calEvents.splice(i,1); saveCalEvents(); renderCal(); };
 renderCal();
 
