@@ -453,17 +453,65 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 <!-- ═══ FINANCES ═══ -->
 <div class="page" id="page-finance">
   <div class="ph"><div><div class="pt">Finances</div><div class="ps">income & expenses</div></div></div>
-  <div class="g3">
-    <div class="scard"><div class="slabel">income</div><div class="sval pos" id="fin-income">$0.00</div></div>
-    <div class="scard"><div class="slabel">expenses</div><div class="sval neg" id="fin-expense">$0.00</div></div>
-    <div class="scard"><div class="slabel">balance</div><div class="sval" id="fin-balance">$0.00</div></div>
+
+  <!-- Status row - always visible -->
+  <div class="g4">
+    <div class="scard"><div class="slabel">monthly income</div><div class="sval pos" id="fin-income">$0</div></div>
+    <div class="scard"><div class="slabel">monthly expenses</div><div class="sval neg" id="fin-expense">$0</div></div>
+    <div class="scard"><div class="slabel">balance</div><div class="sval" id="fin-balance">$0</div></div>
+    <div class="scard"><div class="slabel">savings rate</div><div class="sval" id="fin-savings-rate">0%</div></div>
   </div>
+
+  <!-- Salary card -->
+  <div class="card">
+    <div class="card-title"><div class="cdot" style="background:var(--t)"></div>Salary overview</div>
+    <div class="g3" style="margin-bottom:16px">
+      <div class="scard">
+        <div class="slabel">yearly gross</div>
+        <div class="sval pos" id="sal-yearly">$0</div>
+      </div>
+      <div class="scard">
+        <div class="slabel">monthly gross</div>
+        <div class="sval pos" id="sal-monthly-gross">$0</div>
+      </div>
+      <div class="scard">
+        <div class="slabel">monthly take-home</div>
+        <div class="sval" style="color:var(--g)" id="sal-monthly-net">$0</div>
+        <div style="font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:4px" id="sal-tax-note"></div>
+      </div>
+    </div>
+    <div style="border-top:1px solid var(--b1);padding-top:14px">
+      <div class="card-title" style="margin-bottom:10px"><div class="cdot" style="background:var(--t)"></div>Edit salary</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <label style="font-size:10px;color:var(--muted);font-family:var(--mono)">YEARLY GROSS SALARY</label>
+          <input class="inp" id="sal-yearly-inp" type="number" min="0" placeholder="e.g. 75000" style="width:160px">
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <label style="font-size:10px;color:var(--muted);font-family:var(--mono)">TAX RATE %</label>
+          <input class="inp" id="sal-tax-inp" type="number" min="0" max="100" placeholder="e.g. 25" style="width:100px">
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <label style="font-size:10px;color:var(--muted);font-family:var(--mono)">MONTHLY TAKE-HOME (override)</label>
+          <input class="inp" id="sal-net-inp" type="number" min="0" placeholder="optional override" style="width:180px">
+        </div>
+        <button class="btn" onclick="saveSalary()">Save</button>
+      </div>
+      <div style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-top:8px">If you enter take-home directly it overrides the tax calculation.</div>
+    </div>
+  </div>
+
+  <!-- Transactions -->
   <div class="card">
     <div class="card-title"><div class="cdot" style="background:var(--pk)"></div>Transactions</div>
     <div id="fin-list" class="sl"></div>
     <div class="form-row">
       <input class="inp inp-flex" id="fin-desc" placeholder="Description…">
-      <select class="inp" id="fin-cat" style="width:115px"><option>Food</option><option>Rent</option><option>Transport</option><option>Health</option><option>Fun</option><option>Bills</option><option>Shopping</option><option>Income</option><option>Other</option></select>
+      <select class="inp" id="fin-cat" style="width:115px">
+        <option>Food</option><option>Rent</option><option>Transport</option><option>Health</option>
+        <option>Fun</option><option>Bills</option><option>Shopping</option><option>Savings</option>
+        <option>Income</option><option>Other</option>
+      </select>
       <input class="inp" id="fin-amt" type="number" min="0" placeholder="Amount" style="width:105px">
       <select class="inp" id="fin-type" style="width:100px"><option>expense</option><option>income</option></select>
       <button class="btn" onclick="addTransaction()">Add</button>
@@ -1409,51 +1457,158 @@ renderCalendar();
 // FINANCES
 // ═══════════════════════════════════════════════════════
 const FIN_KEY = 'lo_finance';
+const SAL_KEY = 'lo_salary';
+
 let transactions = get(FIN_KEY) || [
-  {desc:'Rent',cat:'Rent',amt:1500,type:'expense'},
-  {desc:'Groceries',cat:'Food',amt:180,type:'expense'},
-  {desc:'Salary',cat:'Income',amt:4000,type:'income'},
+  {desc:'Rent',       cat:'Rent',     amt:1500, type:'expense'},
+  {desc:'Groceries',  cat:'Food',     amt:180,  type:'expense'},
+  {desc:'Utilities',  cat:'Bills',    amt:120,  type:'expense'},
 ];
 function saveTransactions() { set(FIN_KEY, transactions); }
+
+// Salary: { yearly, taxRate, netOverride }
+let salaryData = get(SAL_KEY) || { yearly:0, taxRate:25, netOverride:0 };
+function saveSalaryData() { set(SAL_KEY, salaryData); }
+
+function calcSalary() {
+  const yearly = salaryData.yearly || 0;
+  const grossMonthly = yearly / 12;
+  const netMonthly = salaryData.netOverride
+    ? salaryData.netOverride
+    : grossMonthly * (1 - (salaryData.taxRate || 25) / 100);
+  return { yearly, grossMonthly, netMonthly, taxRate: salaryData.taxRate || 25 };
+}
+
+function renderSalary() {
+  const s = calcSalary();
+  const fmt = n => '$' + Math.round(n).toLocaleString();
+  const yEl = document.getElementById('sal-yearly');
+  const mgEl = document.getElementById('sal-monthly-gross');
+  const mnEl = document.getElementById('sal-monthly-net');
+  const tnEl = document.getElementById('sal-tax-note');
+  if (yEl)  yEl.textContent  = fmt(s.yearly);
+  if (mgEl) mgEl.textContent = fmt(s.grossMonthly);
+  if (mnEl) mnEl.textContent = fmt(s.netMonthly);
+  if (tnEl) tnEl.textContent = salaryData.netOverride
+    ? 'manual override'
+    : s.taxRate + '% tax estimate';
+  // Pre-fill inputs
+  const yi = document.getElementById('sal-yearly-inp');
+  const ti = document.getElementById('sal-tax-inp');
+  const ni = document.getElementById('sal-net-inp');
+  if (yi && !yi.value) yi.value = salaryData.yearly || '';
+  if (ti && !ti.value) ti.value = salaryData.taxRate || 25;
+  if (ni && !ni.value) ni.value = salaryData.netOverride || '';
+}
+
+window.saveSalary = function() {
+  salaryData.yearly      = parseFloat(document.getElementById('sal-yearly-inp').value) || 0;
+  salaryData.taxRate     = parseFloat(document.getElementById('sal-tax-inp').value) || 25;
+  salaryData.netOverride = parseFloat(document.getElementById('sal-net-inp').value) || 0;
+  saveSalaryData();
+  renderSalary();
+  renderFinances();
+  toast('Salary saved ✓');
+};
 
 function renderFinances() {
   let inc=0, exp=0;
   transactions.forEach(t => t.type==='income' ? inc+=t.amt : exp+=t.amt);
-  const bal = inc - exp;
-  document.getElementById('fin-income').textContent = '$'+inc.toFixed(2);
-  document.getElementById('fin-expense').textContent = '$'+exp.toFixed(2);
+
+  // Add salary take-home to income if set
+  const s = calcSalary();
+  const salaryMonthly = s.netMonthly;
+  const totalInc = inc + salaryMonthly;
+  const bal = totalInc - exp;
+  const savingsRate = totalInc > 0 ? Math.round((bal/totalInc)*100) : 0;
+
+  const fmt = n => '$' + Math.abs(Math.round(n)).toLocaleString();
+  document.getElementById('fin-income').textContent  = fmt(totalInc);
+  document.getElementById('fin-expense').textContent = fmt(exp);
   const bEl = document.getElementById('fin-balance');
-  bEl.textContent = (bal>=0?'$':'-$')+Math.abs(bal).toFixed(2);
-  bEl.style.color = bal>=0?'var(--t)':'var(--r)';
+  bEl.textContent = (bal>=0?'$':'-$') + Math.abs(Math.round(bal)).toLocaleString();
+  bEl.style.color = bal>=0 ? 'var(--t)' : 'var(--r)';
+  const srEl = document.getElementById('fin-savings-rate');
+  if (srEl) { srEl.textContent = savingsRate+'%'; srEl.style.color = savingsRate>20?'var(--g)':savingsRate>0?'var(--a)':'var(--r)'; }
+
   const el = document.getElementById('fin-list');
   el.innerHTML = transactions.length ? transactions.slice().reverse().map((t,ri) => {
     const i = transactions.length-1-ri;
-    return '<div class="frow"><div><div class="flabel">'+t.desc+'</div><div class="fcat">'+t.cat+'</div></div>'
-      +'<div style="display:flex;align-items:center;gap:9px"><div class="famt '+(t.type==='income'?'pos':'neg')+'">'+(t.type==='income'?'+':'-')+'$'+t.amt.toFixed(2)+'</div>'
-      +'<span class="del" onclick="delTransaction('+i+')">✕</span></div></div>';
+    return '<div class="frow" id="fin-row-'+i+'">'
+      +'<div style="flex:1"><div class="flabel">'+t.desc+'</div><div class="fcat">'+t.cat+'</div></div>'
+      +'<div style="display:flex;align-items:center;gap:9px">'
+      +'<div class="famt '+(t.type==='income'?'pos':'neg')+'">'+(t.type==='income'?'+':'-')+' $'+t.amt.toLocaleString()+'</div>'
+      +'<button class="btn-ghost btn-sm" onclick="showFinEdit('+i+')">Edit</button>'
+      +'<span class="del" onclick="delTransaction('+i+')">✕</span>'
+      +'</div></div>';
   }).join('') : '<div class="empty">No transactions yet</div>';
+  renderSalary();
   renderDashFinance();
 }
+
+window.showFinEdit = function(i) {
+  const t = transactions[i];
+  const row = document.getElementById('fin-row-'+i);
+  if (!row) return;
+  row.innerHTML = '';
+  row.style.flexDirection = 'column';
+  row.style.gap = '8px';
+  row.style.paddingTop = '10px';
+  row.style.paddingBottom = '10px';
+
+  const r1 = document.createElement('div');
+  r1.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap';
+  const descInp = document.createElement('input');
+  descInp.className='inp inp-flex'; descInp.value=t.desc; descInp.placeholder='Description…';
+  const catSel = document.createElement('select');
+  catSel.className='inp'; catSel.style.width='115px';
+  ['Food','Rent','Transport','Health','Fun','Bills','Shopping','Savings','Income','Other'].forEach(c => {
+    const o=document.createElement('option'); o.value=c; o.textContent=c;
+    if(c===t.cat) o.selected=true; catSel.appendChild(o);
+  });
+  const amtInp = document.createElement('input');
+  amtInp.className='inp'; amtInp.type='number'; amtInp.value=t.amt; amtInp.style.width='105px';
+  const typeSel = document.createElement('select');
+  typeSel.className='inp'; typeSel.style.width='100px';
+  ['expense','income'].forEach(v => { const o=document.createElement('option'); o.value=v; o.textContent=v; if(v===t.type)o.selected=true; typeSel.appendChild(o); });
+  r1.appendChild(descInp); r1.appendChild(catSel); r1.appendChild(amtInp); r1.appendChild(typeSel);
+
+  const r2 = document.createElement('div');
+  r2.style.cssText='display:flex;gap:8px';
+  const saveBtn=document.createElement('button'); saveBtn.className='btn btn-sm'; saveBtn.textContent='Save';
+  saveBtn.onclick=function(){
+    const desc=descInp.value.trim(); const amt=parseFloat(amtInp.value)||0;
+    if(!desc||!amt){toast('Enter description and amount',true);return;}
+    transactions[i]={desc,cat:catSel.value,amt,type:typeSel.value};
+    saveTransactions(); renderFinances(); toast('Transaction updated ✓');
+  };
+  const cancelBtn=document.createElement('button'); cancelBtn.className='btn-ghost btn-sm'; cancelBtn.textContent='Cancel';
+  cancelBtn.onclick=function(){renderFinances();};
+  r2.appendChild(saveBtn); r2.appendChild(cancelBtn);
+  row.appendChild(r1); row.appendChild(r2);
+};
 
 function renderDashFinance() {
   const el = document.getElementById('dash-finance');
   if (!el) return;
   let inc=0,exp=0;
   transactions.forEach(t => t.type==='income'?inc+=t.amt:exp+=t.amt);
-  const bal=inc-exp;
+  const s = calcSalary();
+  const totalInc = inc + s.netMonthly;
+  const bal = totalInc - exp;
   const dbEl = document.getElementById('ds-balance');
-  if (dbEl) { dbEl.textContent=(bal>=0?'$':'-$')+Math.abs(bal).toFixed(0); dbEl.style.color=bal>=0?'var(--t)':'var(--r)'; }
+  if (dbEl) { dbEl.textContent=(bal>=0?'$':'-$')+Math.abs(Math.round(bal)).toLocaleString(); dbEl.style.color=bal>=0?'var(--t)':'var(--r)'; }
   const recent = transactions.slice().reverse().slice(0,4);
   el.innerHTML = recent.length ? recent.map(t =>
     '<div class="frow"><div><div class="flabel">'+t.desc+'</div><div class="fcat">'+t.cat+'</div></div>'
-    +'<div class="famt '+(t.type==='income'?'pos':'neg')+'">'+(t.type==='income'?'+':'-')+'$'+t.amt.toFixed(0)+'</div></div>'
+    +'<div class="famt '+(t.type==='income'?'pos':'neg')+'">'+(t.type==='income'?'+':'-')+'$'+Math.round(t.amt).toLocaleString()+'</div></div>'
   ).join('') : '<div class="empty">No transactions yet</div>';
 }
 
 window.addTransaction = function() {
   const desc = document.getElementById('fin-desc').value.trim();
-  const cat = document.getElementById('fin-cat').value;
-  const amt = parseFloat(document.getElementById('fin-amt').value)||0;
+  const cat  = document.getElementById('fin-cat').value;
+  const amt  = parseFloat(document.getElementById('fin-amt').value)||0;
   const type = document.getElementById('fin-type').value;
   if (!desc||!amt) { toast('Enter description and amount', true); return; }
   transactions.push({desc,cat,amt,type});
@@ -1461,7 +1616,9 @@ window.addTransaction = function() {
   document.getElementById('fin-desc').value=''; document.getElementById('fin-amt').value='';
   toast('Transaction saved ✓');
 };
-window.delTransaction = function(i) { transactions.splice(i,1); saveTransactions(); renderFinances(); };
+window.delTransaction = function(i) {
+  if (confirm('Delete "'+transactions[i].desc+'"?')) { transactions.splice(i,1); saveTransactions(); renderFinances(); }
+};
 renderFinances();
 
 // ═══════════════════════════════════════════════════════
@@ -1972,7 +2129,7 @@ function renderAll(){
   chores=loadChores(); renderChoreList('chore-list'); renderChoreList('dash-chores');
   schedItems=get(SCHED_KEY)||schedItems; renderScheduleList();
   calEvents=get(CAL_KEY)||calEvents; renderCalendar(); renderDashSchedule();
-  transactions=get(FIN_KEY)||transactions; renderFinances();
+  transactions=get(FIN_KEY)||transactions; salaryData=get(SAL_KEY)||salaryData; renderFinances();
   nutrGoals=get(NUTR_KEY)||nutrGoals; foods=get(DIET_KEY)||foods; renderDiet();
   workouts=get(FIT_KEY)||workouts; renderFitness();
   goals=get(GOALS_KEY)||goals; renderGoals();
