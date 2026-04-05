@@ -186,6 +186,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 <div class="app">
 <nav class="sidebar">
   <div class="logo"><div class="logo-dot"></div>life.os</div>
+  <div id="update-btn" onclick="checkForUpdate()" style="display:flex;align-items:center;gap:8px;padding:7px 10px;margin-bottom:8px;background:rgba(200,242,126,0.08);border:1px solid rgba(200,242,126,0.2);border-radius:8px;cursor:pointer;transition:all .15s" onmouseover="this.style.background='rgba(200,242,126,0.15)'" onmouseout="this.style.background='rgba(200,242,126,0.08)'">
+    <span id="update-icon" style="font-size:13px">↻</span>
+    <span id="update-label" style="font-size:11px;font-family:var(--mono);color:var(--a)">check for update</span>
+  </div>
   <div class="nav-sec">overview</div>
   <div class="nav-item active" data-page="home"><div class="ndot" style="background:var(--a)"></div>Dashboard</div>
   <div class="nav-sec">daily</div>
@@ -437,13 +441,28 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
       <div class="cgrid" id="cal-grid"></div>
     </div>
     <div class="card">
-      <div class="ctitle"><div class="cdot" style="background:var(--a6)"></div>Events</div>
-      <div id="cal-events" class="sl"></div>
-      <div class="frow2">
-        <input class="inp" id="cal-date" type="date" style="width:150px">
-        <input class="inp inpf" id="cal-event" placeholder="Event name…">
-        <button class="btn" onclick="addCalEvent()">Add</button>
+      <div class="ctitle"><div class="cdot" style="background:var(--a6)"></div>Add event</div>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px">
+        <div class="frow2" style="margin-top:0">
+          <input class="inp inpf" id="cal-event" placeholder="Event name…">
+          <input class="inp" id="cal-date" type="date" style="width:150px">
+        </div>
+        <div class="frow2" style="margin-top:0;align-items:center">
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+            <input type="checkbox" id="cal-allday" onchange="toggleCalTime()" checked style="width:15px;height:15px;cursor:pointer">
+            <span style="color:var(--muted)">All day</span>
+          </label>
+          <input class="inp" id="cal-time" type="time" style="width:120px;display:none">
+          <select class="inp" id="cal-reminder" style="width:160px">
+            <option value="">No reminder</option>
+            <option value="1day">Remind 1 day before</option>
+            <option value="1week">Remind 1 week before</option>
+          </select>
+          <button class="btn" onclick="addCalEvent()">Add</button>
+        </div>
       </div>
+      <div class="ctitle" style="margin-bottom:10px"><div class="cdot" style="background:var(--a6)"></div>Upcoming events</div>
+      <div id="cal-events" class="sl"></div>
     </div>
   </div>
 </div>
@@ -800,6 +819,59 @@ window.lsSet = function(key, val) {
 };
 
 initStorage();
+
+// ================================================================
+// AUTO UPDATE
+// ================================================================
+const GITHUB_RAW_URL = 'https://raw.githubusercontent.com/Jakehzcoding/lifeos/refs/heads/main/life-os.html';
+
+window.checkForUpdate = async function() {
+  const icon  = document.getElementById('update-icon');
+  const label = document.getElementById('update-label');
+  icon.style.animation  = 'spin 1s linear infinite';
+  label.textContent = 'checking…';
+
+  // Add spin animation if not already there
+  if (!document.getElementById('spin-style')) {
+    const st = document.createElement('style');
+    st.id = 'spin-style';
+    st.textContent = '@keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }';
+    document.head.appendChild(st);
+  }
+
+  try {
+    // Fetch latest file from GitHub with cache-busting
+    const res = await fetch(GITHUB_RAW_URL + '?v=' + Date.now());
+    if (!res.ok) throw new Error('Failed to fetch');
+    const newHtml = await res.text();
+
+    // Save the new file to the server so it gets written to disk
+    const saveRes = await fetch(window.location.origin + '/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: newHtml
+    });
+
+    if (saveRes.ok) {
+      icon.style.animation = '';
+      label.textContent = 'updated! reloading…';
+      setTimeout(() => location.reload(true), 1200);
+    } else {
+      throw new Error('Server did not save');
+    }
+  } catch(e) {
+    icon.style.animation = '';
+    label.textContent = 'update failed';
+    icon.style.color = 'var(--danger)';
+    label.style.color = 'var(--danger)';
+    setTimeout(() => {
+      icon.style.color = ''; label.style.color = '';
+      label.textContent = 'check for update';
+      icon.textContent = '↻';
+    }, 3000);
+    console.error('Update error:', e);
+  }
+};
 
 // ================================================================
 // DATE HELPERS — always use local time, never UTC
@@ -1353,14 +1425,67 @@ renderProjects();
 // ================================================================
 function renderDashSchedule() {
   const el = document.getElementById('home-schedule');
-  const sorted = schedItems.slice().sort((a,b)=>a.time.localeCompare(b.time)).slice(0,5);
-  if (!sorted.length) { el.innerHTML = '<div class="empty">No events scheduled</div>'; return; }
-  el.innerHTML = sorted.map((s,i) => {
-    const dc = DOT_COLORS[i % DOT_COLORS.length];
-    return '<div class="tlitem"><div class="tltime">' + s.time + '</div>'
-      + '<div class="tlline"><div class="tldot" style="background:' + dc + '"></div>' + (i < sorted.length-1 ? '<div class="tlvline"></div>' : '') + '</div>'
-      + '<div class="tlcontent"><div class="tltitle">' + s.title + '</div>' + (s.desc ? '<div class="tldesc">' + s.desc + '</div>' : '') + '</div></div>';
+
+  // Merge time-blocked schedule items with today's calendar events
+  const items = [];
+
+  // Add schedule items
+  schedItems.forEach(s => {
+    items.push({ time: s.time || '00:00', title: s.title, desc: s.desc || '', type: 'schedule' });
+  });
+
+  // Add today's calendar events
+  calEvents.filter(e => e.date === TODAY).forEach(e => {
+    items.push({
+      time: e.allDay ? '00:00' : (e.time || '00:00'),
+      title: e.title,
+      desc: e.allDay ? 'all day' : (e.time || ''),
+      type: 'calendar',
+      allDay: e.allDay
+    });
+  });
+
+  // Check for upcoming reminders (1 day or 1 week away)
+  const reminders = calEvents.filter(e => {
+    if (!e.reminder) return false;
+    const eventDate = new Date(e.date + 'T12:00:00');
+    const daysUntil = Math.round((eventDate - NOW) / (1000*60*60*24));
+    return (e.reminder === '1day' && daysUntil === 1) || (e.reminder === '1week' && daysUntil === 7);
+  });
+
+  items.sort((a,b) => {
+    if (a.allDay && !b.allDay) return -1;
+    if (!a.allDay && b.allDay) return 1;
+    return a.time.localeCompare(b.time);
+  });
+
+  if (!items.length && !reminders.length) {
+    el.innerHTML = '<div class="empty">No events today</div>';
+    return;
+  }
+
+  let html = '';
+
+  // Show reminders at top
+  reminders.forEach(e => {
+    const daysUntil = Math.round((new Date(e.date+'T12:00:00') - NOW) / (1000*60*60*24));
+    html += '<div style="display:flex;align-items:center;gap:10px;padding:7px 10px;margin-bottom:8px;background:rgba(242,201,126,0.1);border:1px solid rgba(242,201,126,0.25);border-radius:8px">'
+      + '<span style="font-size:14px">🔔</span>'
+      + '<div><div style="font-size:12px;font-weight:500;color:var(--a4)">' + e.title + '</div>'
+      + '<div style="font-size:10px;color:var(--muted);font-family:var(--mono)">' + (daysUntil === 1 ? 'tomorrow' : 'in 1 week') + ' · ' + e.date + '</div></div>'
+      + '</div>';
+  });
+
+  // Show today items as timeline
+  html += items.map((s,i) => {
+    const dc = s.type === 'calendar' ? '#b07ef2' : DOT_COLORS[i % DOT_COLORS.length];
+    const timeLabel = s.allDay ? '<span style="font-size:10px;font-family:var(--mono);color:var(--a6);background:rgba(176,126,242,0.12);padding:1px 6px;border-radius:4px">all day</span>' : s.time;
+    return '<div class="tlitem"><div class="tltime" style="font-size:11px">' + timeLabel + '</div>'
+      + '<div class="tlline"><div class="tldot" style="background:' + dc + '"></div>' + (i < items.length-1 ? '<div class="tlvline"></div>' : '') + '</div>'
+      + '<div class="tlcontent"><div class="tltitle">' + s.title + '</div>' + (s.desc && !s.allDay ? '<div class="tldesc">' + s.desc + '</div>' : '') + '</div></div>';
   }).join('');
+
+  el.innerHTML = html;
 }
 function renderDashGoals() {
   const el = document.getElementById('home-goals');
