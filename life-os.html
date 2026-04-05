@@ -790,6 +790,17 @@ function lastNDays(n) {
   });
 }
 
+// Convert 24h time string "HH:MM" to "h:MMam/pm"
+function to12h(t) {
+  if (!t) return '';
+  const parts = t.split(':');
+  let h = parseInt(parts[0]);
+  const m = parts[1] || '00';
+  const ampm = h >= 12 ? 'pm' : 'am';
+  h = h % 12 || 12;
+  return m === '00' ? h + ampm : h + ':' + m + ampm;
+}
+
 // Midnight reset
 setTimeout(() => location.reload(true),
   new Date(NOW.getFullYear(), NOW.getMonth(), NOW.getDate()+1, 0, 0, 5) - NOW);
@@ -989,7 +1000,6 @@ function renderScheduleList() {
   sorted.forEach(function(s, i) {
     const oi = schedItems.indexOf(s);
     const col = SCHED_COLORS[i % SCHED_COLORS.length];
-    const timeRange = s.time + (s.endTime ? ' → ' + s.endTime : '');
     const row = document.createElement('div');
     row.id = 'sched-row-' + oi;
     row.style.cssText = 'display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--b1)';
@@ -1002,7 +1012,7 @@ function renderScheduleList() {
     // Content
     const content2 = document.createElement('div');
     content2.style.cssText = 'flex:1;min-width:0';
-    content2.innerHTML = '<div style="font-size:12px;font-family:var(--mono);color:var(--muted);margin-bottom:2px">'+timeRange+'</div>'
+    content2.innerHTML = '<div style="font-size:12px;font-family:var(--mono);color:var(--muted);margin-bottom:2px">'+to12h(s.time)+(s.endTime?' → '+to12h(s.endTime):'')+'</div>'
       + '<div class="tl-title">'+s.title+'</div>'
       + (s.desc?'<div class="tl-desc">'+s.desc+'</div>':'');
 
@@ -1104,8 +1114,8 @@ function renderDashSchedule() {
   });
   if (!items.length && !reminders.length) { el.innerHTML = '<div class="empty">No events today</div>'; return; }
   html += items.map((s,i) => {
-    const timeLabel = s.allDay ? '<span style="font-size:9px;font-family:var(--mono);color:var(--p);background:rgba(176,126,242,0.12);padding:1px 6px;border-radius:3px">all day</span>' : s.time;
-    const endLabel = s.endTime ? ' → '+s.endTime : ''; return '<div class="tl-item"><div class="tl-time" style="font-size:11px">' + timeLabel + '<div style="font-size:10px;color:var(--muted)">' + endLabel + '</div></div>'
+    const timeLabel = s.allDay ? '<span style="font-size:9px;font-family:var(--mono);color:var(--p);background:rgba(176,126,242,0.12);padding:1px 6px;border-radius:3px">all day</span>' : to12h(s.time);
+    const endLabel = s.endTime ? ' → '+to12h(s.endTime) : ''; return '<div class="tl-item"><div class="tl-time" style="font-size:11px">' + timeLabel + '<div style="font-size:10px;color:var(--muted)">' + endLabel + '</div></div>'
       + '<div class="tl-line"><div class="tl-dot" style="background:' + s.col + '"></div>' + (i<items.length-1?'<div class="tl-vline"></div>':'') + '</div>'
       + '<div class="tl-content"><div class="tl-title">' + s.title + '</div>' + (!s.allDay&&s.desc?'<div class="tl-desc">'+s.desc+'</div>':'') + '</div></div>';
   }).join('');
@@ -1168,7 +1178,7 @@ function renderCalendar() {
     const dayEvents = calEvents.filter(e => e.date===ds).sort((a,b)=>(a.time||'').localeCompare(b.time||''));
     const maxChips = 2;
     let chips = dayEvents.slice(0, maxChips).map(e => {
-      const label2 = (e.allDay ? '' : (e.time ? e.time.slice(0,5)+' ' : '')) + e.title;
+      const label2 = (e.allDay ? '' : (e.time ? to12h(e.time)+' ' : '')) + e.title;
       return '<div class="cal-ev-chip' + (e.allDay?' allday':'') + '" title="' + e.title + '">' + label2 + '</div>';
     }).join('');
     if (dayEvents.length > maxChips) chips += '<div class="cal-more">+' + (dayEvents.length-maxChips) + ' more</div>';
@@ -1205,7 +1215,7 @@ window.openCalDay = function(ds) {
 };
 
 function renderCalEventRow(container, e, i, ds) {
-  const timeStr = e.allDay ? 'All day' : (e.time || '');
+  const timeStr = e.allDay ? 'All day' : to12h(e.time);
   const remStr = e.reminder==='1day' ? '🔔 1 day before' : e.reminder==='1week' ? '🔔 1 week before' : 'No reminder';
 
   const row = document.createElement('div');
@@ -1360,7 +1370,7 @@ function renderCalEvents() {
     const i = calEvents.indexOf(e);
     const past = e.date < TODAY;
     const isToday2 = e.date === TODAY;
-    const timeStr = e.allDay ? 'all day' : (e.time || '');
+    const timeStr = e.allDay ? 'all day' : to12h(e.time);
     const remStr = e.reminder==='1day'?'🔔 1 day before':e.reminder==='1week'?'🔔 1 week before':'';
     return '<div class="frow" style="' + (past?'opacity:0.4':'') + '">'
       + '<div style="flex:1"><div class="flabel">' + e.title + (isToday2?' <span style="font-size:9px;background:rgba(200,242,126,0.15);color:var(--g);padding:1px 6px;border-radius:3px;font-family:var(--mono)">today</span>':'') + '</div>'
