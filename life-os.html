@@ -119,13 +119,17 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 .hday.today-col{border-color:var(--b2)}
 
 /* Calendar */
-.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-top:8px}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-top:8px}
 .cal-head{text-align:center;font-size:10px;color:var(--muted);font-family:var(--mono);padding:4px 0}
-.cal-day{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:6px;font-size:12px;cursor:pointer;transition:background .12s;position:relative}
-.cal-day:hover{background:var(--s3)}
-.cal-day.today{background:var(--g);color:#0f0f11;font-weight:600}
-.cal-day.has-event::after{content:'';width:4px;height:4px;border-radius:50%;background:var(--b);position:absolute;bottom:3px}
-.cal-day.other-month{color:var(--muted);opacity:.4}
+.cal-day{min-height:52px;border-radius:7px;font-size:12px;cursor:pointer;transition:background .12s;position:relative;padding:4px 5px;display:flex;flex-direction:column;align-items:flex-start;gap:2px;border:1px solid transparent}
+.cal-day:hover{background:var(--s2);border-color:var(--b1)}
+.cal-day.today{background:rgba(200,242,126,0.1);border-color:var(--g)}
+.cal-day.today .cal-day-num{background:var(--g);color:#0f0f11;font-weight:700;border-radius:4px;padding:1px 5px}
+.cal-day.other-month{opacity:.3}
+.cal-day-num{font-size:12px;font-weight:500;line-height:1.4}
+.cal-ev-chip{font-size:9px;font-family:var(--mono);padding:1px 5px;border-radius:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%;background:rgba(126,184,242,0.2);color:var(--b);line-height:1.5}
+.cal-ev-chip.allday{background:rgba(176,126,242,0.2);color:var(--p)}
+.cal-more{font-size:9px;color:var(--muted);font-family:var(--mono);padding-left:2px}
 
 /* Forms */
 .form-row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
@@ -419,6 +423,17 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
       </div>
       <div class="card-title" style="margin-top:16px;margin-bottom:8px"><div class="cdot" style="background:var(--p)"></div>Upcoming events</div>
       <div id="cal-events" class="sl"></div>
+    </div>
+  </div>
+
+  <!-- Day detail panel -->
+  <div id="cal-day-panel" style="display:none">
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div style="font-size:15px;font-weight:600" id="cal-day-title"></div>
+        <button class="btn-ghost btn-sm" onclick="closeCalDay()">✕ Close</button>
+      </div>
+      <div id="cal-day-events"></div>
     </div>
   </div>
 </div>
@@ -1044,16 +1059,67 @@ function renderCalendar() {
   const firstDay = d.getDay();
   const daysInMonth = new Date(year, month+1, 0).getDate();
   let html = DAY_NAMES.map(dn => '<div class="cal-head">' + dn[0] + '</div>').join('');
-  for (let i=0; i<firstDay; i++) html += '<div class="cal-day other-month"></div>';
+  for (let i=0; i<firstDay; i++) html += '<div class="cal-day other-month"><div class="cal-day-num"></div></div>';
   for (let i=1; i<=daysInMonth; i++) {
     const ds = year + '-' + String(month+1).padStart(2,'0') + '-' + String(i).padStart(2,'0');
     const isToday = calOffset===0 && i===NOW.getDate();
-    const hasEv = calEvents.some(e => e.date===ds);
-    html += '<div class="cal-day' + (isToday?' today':'') + (hasEv?' has-event':'') + '" data-date="' + ds + '" onclick="pickCalDay(this.dataset.date)">' + i + '</div>';
+    const dayEvents = calEvents.filter(e => e.date===ds).sort((a,b)=>(a.time||'').localeCompare(b.time||''));
+    const maxChips = 2;
+    let chips = dayEvents.slice(0, maxChips).map(e => {
+      const label2 = (e.allDay ? '' : (e.time ? e.time.slice(0,5)+' ' : '')) + e.title;
+      return '<div class="cal-ev-chip' + (e.allDay?' allday':'') + '" title="' + e.title + '">' + label2 + '</div>';
+    }).join('');
+    if (dayEvents.length > maxChips) chips += '<div class="cal-more">+' + (dayEvents.length-maxChips) + ' more</div>';
+    html += '<div class="cal-day' + (isToday?' today':'') + '" data-date="' + ds + '" onclick="openCalDay(this.dataset.date)">'
+      + '<div class="cal-day-num">' + i + '</div>'
+      + chips
+      + '</div>';
   }
   grid.innerHTML = html;
   renderCalEvents();
 }
+
+window.openCalDay = function(ds) {
+  const panel = document.getElementById('cal-day-panel');
+  const title = document.getElementById('cal-day-title');
+  const evEl  = document.getElementById('cal-day-events');
+  const dt = new Date(ds + 'T12:00:00');
+  const dayName = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][dt.getDay()];
+  const parts = ds.split('-');
+  title.textContent = dayName + ', ' + MONTH_SHORT[parseInt(parts[1])-1] + ' ' + parseInt(parts[2]) + ' ' + parts[0];
+  const dayEvents = calEvents.filter(function(e){ return e.date===ds; }).sort(function(a,b){ return (a.time||'').localeCompare(b.time||''); });
+  if (!dayEvents.length) {
+    evEl.innerHTML = '<div class="empty">No events — use the form above to add one</div>';
+  } else {
+    evEl.innerHTML = '';
+    dayEvents.forEach(function(e) {
+      const i = calEvents.indexOf(e);
+      const timeStr = e.allDay ? 'All day' : (e.time || '');
+      const remStr = e.reminder==='1day' ? '🔔 1 day before' : e.reminder==='1week' ? '🔔 1 week before' : 'No reminder';
+      const row = document.createElement('div');
+      row.className = 'frow';
+      row.innerHTML = '<div style="flex:1"><div class="flabel">' + e.title + '</div>'
+        + '<div class="fcat">' + (timeStr ? timeStr + ' · ' : '') + remStr + '</div></div>';
+      const del = document.createElement('span');
+      del.className = 'del';
+      del.textContent = '✕';
+      del.onclick = (function(idx, date){ return function(){ delCalEvent(idx); openCalDay(date); }; })(i, ds);
+      row.appendChild(del);
+      evEl.appendChild(row);
+    });
+  }
+  document.getElementById('cal-date').value = ds;
+  panel.style.display = 'block';
+  panel.scrollIntoView({behavior:'smooth', block:'nearest'});
+};
+
+window.closeCalDay = function() {
+  document.getElementById('cal-day-panel').style.display = 'none';
+};
+
+window.pickCalDay = function(date) {
+  document.getElementById('cal-date').value = date;
+};
 
 function renderCalEvents() {
   const el = document.getElementById('cal-events');
