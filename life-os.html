@@ -378,11 +378,18 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
   <div class="ph"><div><div class="pt">Schedule</div><div class="ps">daily time blocks</div></div></div>
   <div class="card">
     <div id="schedule-list"></div>
-    <div class="form-row">
-      <input class="inp" id="sched-time" type="time" style="width:110px">
-      <input class="inp inp-flex" id="sched-title" placeholder="Event title…">
-      <input class="inp" id="sched-desc" placeholder="Details (optional)" style="width:150px">
-      <button class="btn" onclick="addScheduleItem()">Add</button>
+    <div style="border-top:1px solid var(--b1);margin-top:14px;padding-top:14px">
+      <div class="card-title" style="margin-bottom:10px"><div class="cdot" style="background:var(--b)"></div>Add time block</div>
+      <div class="form-row" style="margin-top:0;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+          <input class="inp" id="sched-start" type="time" style="width:110px" placeholder="Start">
+          <span style="color:var(--muted);font-size:13px">→</span>
+          <input class="inp" id="sched-end" type="time" style="width:110px" placeholder="End">
+        </div>
+        <input class="inp inp-flex" id="sched-title" placeholder="Event title…" style="min-width:140px">
+        <input class="inp" id="sched-desc" placeholder="Notes (optional)" style="width:150px">
+        <button class="btn" onclick="addScheduleItem()">Add</button>
+      </div>
     </div>
   </div>
 </div>
@@ -959,35 +966,127 @@ function saveCalEvents() { set(CAL_KEY, calEvents); }
 
 const SCHED_KEY = 'lo_schedule';
 const SCHED_COLORS = ['#c8f27e','#7eb8f2','#f2c97e','#b07ef2','#7ef2d8','#f27eb8'];
-let schedItems = get(SCHED_KEY) || [
-  {time:'07:00', title:'Morning routine', desc:''},
-  {time:'09:00', title:'Deep work block', desc:'No meetings'},
-  {time:'12:30', title:'Lunch + walk', desc:''},
-  {time:'18:00', title:'Evening workout', desc:''},
-];
+let schedItems = (() => {
+  const raw = get(SCHED_KEY);
+  if (Array.isArray(raw) && raw.length) {
+    // migrate old items that don't have endTime
+    return raw.map(s => ({time:s.time||'00:00', endTime:s.endTime||'', title:s.title||'', desc:s.desc||''}));
+  }
+  return [
+    {time:'07:00', endTime:'07:30', title:'Morning routine', desc:''},
+    {time:'09:00', endTime:'12:00', title:'Deep work block', desc:'No meetings'},
+    {time:'12:30', endTime:'13:30', title:'Lunch + walk', desc:''},
+    {time:'18:00', endTime:'19:00', title:'Evening workout', desc:''},
+  ];
+})();
 function saveSchedule() { set(SCHED_KEY, schedItems); }
 
 function renderScheduleList() {
   const el = document.getElementById('schedule-list');
   const sorted = schedItems.slice().sort((a,b) => a.time.localeCompare(b.time));
   if (!sorted.length) { el.innerHTML = '<div class="empty">No time blocks yet</div>'; renderDashSchedule(); return; }
-  el.innerHTML = sorted.map((s,i) => {
+  el.innerHTML = '';
+  sorted.forEach(function(s, i) {
     const oi = schedItems.indexOf(s);
     const col = SCHED_COLORS[i % SCHED_COLORS.length];
-    return '<div class="tl-item"><div class="tl-time">' + s.time + '</div>'
-      + '<div class="tl-line"><div class="tl-dot" style="background:' + col + '"></div>' + (i<sorted.length-1?'<div class="tl-vline"></div>':'') + '</div>'
-      + '<div class="tl-content"><div class="tl-title">' + s.title + '</div>' + (s.desc?'<div class="tl-desc">'+s.desc+'</div>':'') + '</div>'
-      + '<span class="del" onclick="delScheduleItem(' + oi + ')">✕</span></div>';
-  }).join('');
+    const timeRange = s.time + (s.endTime ? ' → ' + s.endTime : '');
+    const row = document.createElement('div');
+    row.id = 'sched-row-' + oi;
+    row.style.cssText = 'display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--b1)';
+
+    // Timeline dot
+    const dotWrap = document.createElement('div');
+    dotWrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;flex-shrink:0;padding-top:3px';
+    dotWrap.innerHTML = '<div class="tl-dot" style="background:'+col+'"></div>' + (i<sorted.length-1?'<div class="tl-vline"></div>':'');
+
+    // Content
+    const content2 = document.createElement('div');
+    content2.style.cssText = 'flex:1;min-width:0';
+    content2.innerHTML = '<div style="font-size:12px;font-family:var(--mono);color:var(--muted);margin-bottom:2px">'+timeRange+'</div>'
+      + '<div class="tl-title">'+s.title+'</div>'
+      + (s.desc?'<div class="tl-desc">'+s.desc+'</div>':'');
+
+    // Buttons
+    const btns = document.createElement('div');
+    btns.style.cssText = 'display:flex;gap:6px;align-items:center;flex-shrink:0';
+    const editBtn = document.createElement('button');
+    editBtn.className = 'btn-ghost btn-sm';
+    editBtn.textContent = 'Edit';
+    editBtn.onclick = (function(idx){ return function(){ showSchedEdit(idx); }; })(oi);
+    const delBtn = document.createElement('span');
+    delBtn.className = 'del';
+    delBtn.textContent = '✕';
+    delBtn.onclick = (function(idx){ return function(){ delScheduleItem(idx); }; })(oi);
+    btns.appendChild(editBtn);
+    btns.appendChild(delBtn);
+
+    row.appendChild(dotWrap);
+    row.appendChild(content2);
+    row.appendChild(btns);
+    el.appendChild(row);
+  });
   renderDashSchedule();
 }
+
+window.showSchedEdit = function(i) {
+  const s = schedItems[i];
+  const row = document.getElementById('sched-row-' + i);
+  if (!row) return;
+  row.innerHTML = '';
+  row.style.flexDirection = 'column';
+  row.style.gap = '8px';
+
+  // Time range row
+  const timeRow = document.createElement('div');
+  timeRow.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap';
+  const startInp = document.createElement('input');
+  startInp.className = 'inp'; startInp.type = 'time'; startInp.value = s.time||''; startInp.style.width='110px';
+  const arrow = document.createElement('span');
+  arrow.style.cssText = 'color:var(--muted);font-size:13px'; arrow.textContent = '→';
+  const endInp = document.createElement('input');
+  endInp.className = 'inp'; endInp.type = 'time'; endInp.value = s.endTime||''; endInp.style.width='110px';
+  timeRow.appendChild(startInp); timeRow.appendChild(arrow); timeRow.appendChild(endInp);
+
+  // Title + desc row
+  const detailRow = document.createElement('div');
+  detailRow.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap';
+  const titleInp = document.createElement('input');
+  titleInp.className = 'inp inp-flex'; titleInp.value = s.title; titleInp.placeholder = 'Event title…'; titleInp.style.minWidth='140px';
+  const descInp = document.createElement('input');
+  descInp.className = 'inp'; descInp.value = s.desc||''; descInp.placeholder = 'Notes (optional)'; descInp.style.width='150px';
+  detailRow.appendChild(titleInp); detailRow.appendChild(descInp);
+
+  // Save / cancel
+  const btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;gap:8px';
+  const saveBtn = document.createElement('button');
+  saveBtn.className = 'btn btn-sm'; saveBtn.textContent = 'Save changes';
+  saveBtn.onclick = function() {
+    const newTitle = titleInp.value.trim();
+    if (!newTitle) { toast('Title cannot be empty', true); return; }
+    if (!startInp.value) { toast('Start time required', true); return; }
+    schedItems[i].time    = startInp.value;
+    schedItems[i].endTime = endInp.value || '';
+    schedItems[i].title   = newTitle;
+    schedItems[i].desc    = descInp.value.trim();
+    saveSchedule(); renderScheduleList(); toast('Schedule updated ✓');
+  };
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'btn-ghost btn-sm'; cancelBtn.textContent = 'Cancel';
+  cancelBtn.onclick = function() { renderScheduleList(); };
+  btnRow.appendChild(saveBtn); btnRow.appendChild(cancelBtn);
+
+  row.appendChild(timeRow);
+  row.appendChild(detailRow);
+  row.appendChild(btnRow);
+};
 
 function renderDashSchedule() {
   const el = document.getElementById('dash-schedule');
   if (!el) return;
   const calEventsLoaded = typeof calEvents !== 'undefined' ? calEvents : [];
   const items = [];
-  schedItems.forEach(s => items.push({time:s.time||'00:00', title:s.title, desc:s.desc||'', col:'#7eb8f2', allDay:false}));
+  schedItems.forEach(s => items.push({time:s.time||'00:00', endTime:s.endTime||'', title:s.title, desc:s.desc||'', col:'#7eb8f2', allDay:false}));
   calEventsLoaded.filter(e => e.date === TODAY).forEach(e => {
     items.push({time:e.allDay?'00:00':(e.time||'00:00'), title:e.title, desc:e.allDay?'all day':(e.time||''), col:'#b07ef2', allDay:!!e.allDay});
   });
@@ -1006,7 +1105,7 @@ function renderDashSchedule() {
   if (!items.length && !reminders.length) { el.innerHTML = '<div class="empty">No events today</div>'; return; }
   html += items.map((s,i) => {
     const timeLabel = s.allDay ? '<span style="font-size:9px;font-family:var(--mono);color:var(--p);background:rgba(176,126,242,0.12);padding:1px 6px;border-radius:3px">all day</span>' : s.time;
-    return '<div class="tl-item"><div class="tl-time" style="font-size:11px">' + timeLabel + '</div>'
+    const endLabel = s.endTime ? ' → '+s.endTime : ''; return '<div class="tl-item"><div class="tl-time" style="font-size:11px">' + timeLabel + '<div style="font-size:10px;color:var(--muted)">' + endLabel + '</div></div>'
       + '<div class="tl-line"><div class="tl-dot" style="background:' + s.col + '"></div>' + (i<items.length-1?'<div class="tl-vline"></div>':'') + '</div>'
       + '<div class="tl-content"><div class="tl-title">' + s.title + '</div>' + (!s.allDay&&s.desc?'<div class="tl-desc">'+s.desc+'</div>':'') + '</div></div>';
   }).join('');
@@ -1014,15 +1113,18 @@ function renderDashSchedule() {
 }
 
 window.addScheduleItem = function() {
-  const t = document.getElementById('sched-time').value;
-  const ti = document.getElementById('sched-title').value.trim();
-  const d = document.getElementById('sched-desc').value.trim();
-  if (!t || !ti) { toast('Please enter time and title', true); return; }
-  schedItems.push({time:t, title:ti, desc:d});
+  const start = document.getElementById('sched-start').value;
+  const end   = document.getElementById('sched-end').value;
+  const ti    = document.getElementById('sched-title').value.trim();
+  const d     = document.getElementById('sched-desc').value.trim();
+  if (!start || !ti) { toast('Please enter a start time and title', true); return; }
+  schedItems.push({time:start, endTime:end||'', title:ti, desc:d});
   saveSchedule(); renderScheduleList();
+  document.getElementById('sched-start').value = '';
+  document.getElementById('sched-end').value = '';
   document.getElementById('sched-title').value = '';
   document.getElementById('sched-desc').value = '';
-  toast('Schedule updated ✓');
+  toast('Time block added ✓');
 };
 window.delScheduleItem = function(i) { schedItems.splice(i,1); saveSchedule(); renderScheduleList(); };
 renderScheduleList();
