@@ -1088,29 +1088,157 @@ window.openCalDay = function(ds) {
   const parts = ds.split('-');
   title.textContent = dayName + ', ' + MONTH_SHORT[parseInt(parts[1])-1] + ' ' + parseInt(parts[2]) + ' ' + parts[0];
   const dayEvents = calEvents.filter(function(e){ return e.date===ds; }).sort(function(a,b){ return (a.time||'').localeCompare(b.time||''); });
+  evEl.innerHTML = '';
   if (!dayEvents.length) {
     evEl.innerHTML = '<div class="empty">No events — use the form above to add one</div>';
   } else {
-    evEl.innerHTML = '';
     dayEvents.forEach(function(e) {
       const i = calEvents.indexOf(e);
-      const timeStr = e.allDay ? 'All day' : (e.time || '');
-      const remStr = e.reminder==='1day' ? '🔔 1 day before' : e.reminder==='1week' ? '🔔 1 week before' : 'No reminder';
-      const row = document.createElement('div');
-      row.className = 'frow';
-      row.innerHTML = '<div style="flex:1"><div class="flabel">' + e.title + '</div>'
-        + '<div class="fcat">' + (timeStr ? timeStr + ' · ' : '') + remStr + '</div></div>';
-      const del = document.createElement('span');
-      del.className = 'del';
-      del.textContent = '✕';
-      del.onclick = (function(idx, date){ return function(){ delCalEvent(idx); openCalDay(date); }; })(i, ds);
-      row.appendChild(del);
-      evEl.appendChild(row);
+      renderCalEventRow(evEl, e, i, ds);
     });
   }
   document.getElementById('cal-date').value = ds;
   panel.style.display = 'block';
   panel.scrollIntoView({behavior:'smooth', block:'nearest'});
+};
+
+function renderCalEventRow(container, e, i, ds) {
+  const timeStr = e.allDay ? 'All day' : (e.time || '');
+  const remStr = e.reminder==='1day' ? '🔔 1 day before' : e.reminder==='1week' ? '🔔 1 week before' : 'No reminder';
+
+  const row = document.createElement('div');
+  row.style.cssText = 'padding:10px 0;border-bottom:1px solid var(--b1)';
+  row.id = 'cal-ev-row-' + i;
+
+  // View mode
+  const view = document.createElement('div');
+  view.style.cssText = 'display:flex;align-items:center;gap:10px';
+  view.innerHTML = '<div style="flex:1">'
+    + '<div class="flabel">' + e.title + '</div>'
+    + '<div class="fcat">' + (timeStr ? timeStr + ' · ' : '') + remStr + '</div>'
+    + '</div>';
+
+  const editBtn = document.createElement('button');
+  editBtn.className = 'btn-ghost btn-sm';
+  editBtn.textContent = 'Edit';
+  editBtn.style.flexShrink = '0';
+  editBtn.onclick = (function(idx, date){ return function(){ showCalEventEdit(idx, date); }; })(i, ds);
+
+  const delBtn = document.createElement('span');
+  delBtn.className = 'del';
+  delBtn.textContent = '✕';
+  delBtn.onclick = (function(idx, date){ return function(){
+    if (confirm('Delete "' + calEvents[idx].title + '"?')) {
+      delCalEvent(idx);
+      openCalDay(date);
+    }
+  }; })(i, ds);
+
+  view.appendChild(editBtn);
+  view.appendChild(delBtn);
+  row.appendChild(view);
+  container.appendChild(row);
+}
+
+window.showCalEventEdit = function(i, ds) {
+  const e = calEvents[i];
+  const row = document.getElementById('cal-ev-row-' + i);
+  if (!row) return;
+
+  row.innerHTML = '';
+  const form = document.createElement('div');
+  form.style.cssText = 'display:flex;flex-direction:column;gap:8px;padding:4px 0';
+
+  // Title
+  const titleRow = document.createElement('div');
+  titleRow.style.cssText = 'display:flex;gap:8px';
+  const titleInp = document.createElement('input');
+  titleInp.className = 'inp inp-flex';
+  titleInp.value = e.title;
+  titleInp.placeholder = 'Event name…';
+  titleRow.appendChild(titleInp);
+
+  // Date
+  const dateInp = document.createElement('input');
+  dateInp.className = 'inp';
+  dateInp.type = 'date';
+  dateInp.value = e.date;
+  dateInp.style.width = '148px';
+  titleRow.appendChild(dateInp);
+  form.appendChild(titleRow);
+
+  // Time row
+  const timeRow = document.createElement('div');
+  timeRow.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap';
+
+  const alldayLabel = document.createElement('label');
+  alldayLabel.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;background:var(--s2);border:1px solid var(--b1);border-radius:7px;padding:6px 10px';
+  const alldayCb = document.createElement('input');
+  alldayCb.type = 'checkbox';
+  alldayCb.style.cssText = 'width:15px;height:15px;cursor:pointer;accent-color:var(--g)';
+  alldayCb.checked = !!e.allDay;
+  const alldaySpan = document.createElement('span');
+  alldaySpan.style.color = 'var(--muted)';
+  alldaySpan.textContent = 'All day';
+  alldayLabel.appendChild(alldayCb);
+  alldayLabel.appendChild(alldaySpan);
+  timeRow.appendChild(alldayLabel);
+
+  const timeInp = document.createElement('input');
+  timeInp.className = 'inp';
+  timeInp.type = 'time';
+  timeInp.style.cssText = 'width:130px;' + (e.allDay ? 'display:none' : '');
+  timeInp.value = e.time || '';
+  timeRow.appendChild(timeInp);
+
+  alldayCb.onchange = function() {
+    timeInp.style.display = alldayCb.checked ? 'none' : 'inline-block';
+  };
+
+  // Reminder
+  const remSel = document.createElement('select');
+  remSel.className = 'inp';
+  remSel.style.cssText = 'flex:1;min-width:140px';
+  [['','No reminder'],['1day','🔔 1 day before'],['1week','🔔 1 week before']].forEach(function(opt) {
+    const o = document.createElement('option');
+    o.value = opt[0]; o.textContent = opt[1];
+    if ((e.reminder||'') === opt[0]) o.selected = true;
+    remSel.appendChild(o);
+  });
+  timeRow.appendChild(remSel);
+  form.appendChild(timeRow);
+
+  // Buttons
+  const btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;gap:8px;margin-top:2px';
+
+  const saveBtn = document.createElement('button');
+  saveBtn.className = 'btn btn-sm';
+  saveBtn.textContent = 'Save changes';
+  saveBtn.onclick = function() {
+    const newTitle = titleInp.value.trim();
+    if (!newTitle) { toast('Event name cannot be empty', true); return; }
+    calEvents[i].title   = newTitle;
+    calEvents[i].date    = dateInp.value || ds;
+    calEvents[i].allDay  = alldayCb.checked;
+    calEvents[i].time    = alldayCb.checked ? null : (timeInp.value || null);
+    calEvents[i].reminder = remSel.value || null;
+    saveCalEvents();
+    renderCalendar();
+    renderDashSchedule();
+    openCalDay(calEvents[i].date);
+    toast('Event updated ✓');
+  };
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'btn-ghost btn-sm';
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.onclick = (function(idx, date){ return function(){ openCalDay(date); }; })(i, ds);
+
+  btnRow.appendChild(saveBtn);
+  btnRow.appendChild(cancelBtn);
+  form.appendChild(btnRow);
+  row.appendChild(form);
 };
 
 window.closeCalDay = function() {
