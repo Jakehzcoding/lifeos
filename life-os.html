@@ -501,6 +501,35 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
     </div>
   </div>
 
+  <!-- Loans -->
+  <div class="card">
+    <div class="card-title"><div class="cdot" style="background:var(--r)"></div>Loans & debt tracker</div>
+    <div id="loans-list"></div>
+    <div style="border-top:1px solid var(--b1);margin-top:14px;padding-top:14px">
+      <div class="card-title" style="margin-bottom:10px"><div class="cdot" style="background:var(--r)"></div>Add loan</div>
+      <div class="form-row" style="flex-wrap:wrap">
+        <input class="inp inp-flex" id="loan-name" placeholder="Loan name (e.g. Car loan)" style="min-width:160px">
+        <div style="display:flex;flex-direction:column;gap:3px">
+          <label style="font-size:10px;color:var(--muted);font-family:var(--mono)">TOTAL AMOUNT</label>
+          <input class="inp" id="loan-total" type="number" min="0" placeholder="e.g. 15000" style="width:130px">
+        </div>
+        <div style="display:flex;flex-direction:column;gap:3px">
+          <label style="font-size:10px;color:var(--muted);font-family:var(--mono)">AMOUNT PAID</label>
+          <input class="inp" id="loan-paid" type="number" min="0" placeholder="e.g. 3000" style="width:130px">
+        </div>
+        <select class="inp" id="loan-type" style="width:130px">
+          <option>Car loan</option>
+          <option>Personal loan</option>
+          <option>Credit card</option>
+          <option>Student loan</option>
+          <option>Mortgage</option>
+          <option>Other</option>
+        </select>
+        <button class="btn" onclick="addLoan()">Add</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Transactions -->
   <div class="card">
     <div class="card-title"><div class="cdot" style="background:var(--pk)"></div>Transactions</div>
@@ -1511,6 +1540,161 @@ window.saveSalary = function() {
   toast('Salary saved ✓');
 };
 
+// ─── LOANS ───
+const LOANS_KEY = 'lo_loans';
+let loans = get(LOANS_KEY) || [
+  {name:'Car loan',         type:'Car loan',      total:15000, paid:3000},
+  {name:'Sister loan',      type:'Personal loan', total:2000,  paid:500},
+  {name:'Credit card',      type:'Credit card',   total:5000,  paid:1200},
+];
+function saveLoans() { set(LOANS_KEY, loans); }
+
+function renderLoans() {
+  const el = document.getElementById('loans-list');
+  if (!el) return;
+  if (!loans.length) { el.innerHTML = '<div class="empty">No loans added yet</div>'; return; }
+
+  // Summary row
+  const totalDebt = loans.reduce((s,l) => s + l.total, 0);
+  const totalPaid = loans.reduce((s,l) => s + l.paid, 0);
+  const totalLeft = totalDebt - totalPaid;
+  const overallPct = totalDebt > 0 ? Math.round(totalPaid/totalDebt*100) : 0;
+
+  let html = '<div style="background:var(--s2);border:1px solid var(--b1);border-radius:10px;padding:14px 16px;margin-bottom:14px">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
+    + '<div style="font-size:13px;font-weight:500">Total debt payoff</div>'
+    + '<div style="font-family:var(--mono);font-size:13px;color:var(--g)">' + overallPct + '%</div>'
+    + '</div>'
+    + '<div class="pbar" style="height:8px;margin-top:0;margin-bottom:8px"><div class="pfill" style="background:var(--g);width:'+overallPct+'%"></div></div>'
+    + '<div style="display:flex;justify-content:space-between;font-size:11px;font-family:var(--mono);color:var(--muted)">'
+    + '<span>paid: $' + Math.round(totalPaid).toLocaleString() + '</span>'
+    + '<span>remaining: <span style="color:var(--r)">$' + Math.round(totalLeft).toLocaleString() + '</span></span>'
+    + '<span>total: $' + Math.round(totalDebt).toLocaleString() + '</span>'
+    + '</div></div>';
+
+  // Individual loans
+  loans.forEach(function(l, i) {
+    const pct = l.total > 0 ? Math.round(l.paid/l.total*100) : 0;
+    const left = l.total - l.paid;
+    const col = pct >= 75 ? '#c8f27e' : pct >= 50 ? '#7ef2d8' : pct >= 25 ? '#f2c97e' : '#f26e6e';
+    html += '<div id="loan-row-'+i+'" style="padding:12px 0;border-bottom:1px solid var(--b1)">'
+      + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px">'
+      + '<div>'
+      + '<div style="font-size:13px;font-weight:500">'+l.name+'</div>'
+      + '<div style="font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:1px">'+l.type+'</div>'
+      + '</div>'
+      + '<div style="display:flex;align-items:center;gap:8px">'
+      + '<div style="font-family:var(--mono);font-size:12px;color:'+col+'">'+pct+'%</div>'
+      + '<button class="btn-ghost btn-sm" onclick="showLoanEdit('+i+')">Edit</button>'
+      + '<span class="del" onclick="delLoan('+i+')">✕</span>'
+      + '</div></div>'
+      + '<div class="pbar" style="height:6px;margin-top:0;margin-bottom:7px"><div class="pfill" style="background:'+col+';width:'+pct+'%;transition:width .5s ease"></div></div>'
+      + '<div style="display:flex;justify-content:space-between;font-size:11px;font-family:var(--mono);color:var(--muted)">'
+      + '<span style="color:'+col+'">$' + Math.round(l.paid).toLocaleString() + ' paid</span>'
+      + '<span>$' + Math.round(left).toLocaleString() + ' left</span>'
+      + '<span>$' + Math.round(l.total).toLocaleString() + ' total</span>'
+      + '</div></div>';
+  });
+
+  el.innerHTML = html;
+
+  // Re-attach edit/del handlers (innerHTML loses them for dynamically created rows)
+}
+
+window.showLoanEdit = function(i) {
+  const l = loans[i];
+  const row = document.getElementById('loan-row-'+i);
+  if (!row) return;
+  row.innerHTML = '';
+  row.style.paddingTop = '12px';
+  row.style.paddingBottom = '12px';
+
+  const nameInp = document.createElement('input');
+  nameInp.className='inp inp-flex'; nameInp.value=l.name; nameInp.placeholder='Loan name…'; nameInp.style.marginBottom='8px';
+
+  const r1 = document.createElement('div');
+  r1.style.cssText='display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px';
+
+  const totalInp = document.createElement('input');
+  totalInp.className='inp'; totalInp.type='number'; totalInp.value=l.total; totalInp.style.width='130px';
+  const totalLbl = document.createElement('label');
+  totalLbl.style.cssText='display:flex;flex-direction:column;gap:3px';
+  totalLbl.innerHTML='<span style="font-size:10px;color:var(--muted);font-family:var(--mono)">TOTAL AMOUNT</span>';
+  totalLbl.appendChild(totalInp);
+
+  const paidInp = document.createElement('input');
+  paidInp.className='inp'; paidInp.type='number'; paidInp.value=l.paid; paidInp.style.width='130px';
+  const paidLbl = document.createElement('label');
+  paidLbl.style.cssText='display:flex;flex-direction:column;gap:3px';
+  paidLbl.innerHTML='<span style="font-size:10px;color:var(--muted);font-family:var(--mono)">AMOUNT PAID</span>';
+  paidLbl.appendChild(paidInp);
+
+  const typeSel = document.createElement('select');
+  typeSel.className='inp'; typeSel.style.width='130px';
+  ['Car loan','Personal loan','Credit card','Student loan','Mortgage','Other'].forEach(v => {
+    const o=document.createElement('option'); o.value=v; o.textContent=v;
+    if(v===l.type) o.selected=true; typeSel.appendChild(o);
+  });
+
+  r1.appendChild(totalLbl); r1.appendChild(paidLbl); r1.appendChild(typeSel);
+
+  // Quick payment button
+  const qRow = document.createElement('div');
+  qRow.style.cssText='display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px';
+  const qInp = document.createElement('input');
+  qInp.className='inp'; qInp.type='number'; qInp.min='0'; qInp.placeholder='Add payment…'; qInp.style.width='140px';
+  const qBtn = document.createElement('button');
+  qBtn.className='btn-ghost btn-sm'; qBtn.textContent='+ Add payment';
+  qBtn.onclick = function() {
+    const amt = parseFloat(qInp.value)||0;
+    if (!amt) return;
+    paidInp.value = Math.min(parseFloat(totalInp.value)||0, (parseFloat(paidInp.value)||0) + amt);
+    qInp.value = '';
+    toast('Payment added — click Save to confirm');
+  };
+  qRow.appendChild(qInp); qRow.appendChild(qBtn);
+
+  const r2 = document.createElement('div');
+  r2.style.cssText='display:flex;gap:8px';
+  const saveBtn=document.createElement('button'); saveBtn.className='btn btn-sm'; saveBtn.textContent='Save';
+  saveBtn.onclick=function(){
+    const name=nameInp.value.trim();
+    const total=parseFloat(totalInp.value)||0;
+    const paid=Math.min(parseFloat(paidInp.value)||0, total);
+    if(!name||!total){toast('Enter name and total amount',true);return;}
+    loans[i]={name,type:typeSel.value,total,paid};
+    saveLoans(); renderLoans(); toast(name+' updated ✓');
+  };
+  const cancelBtn=document.createElement('button'); cancelBtn.className='btn-ghost btn-sm'; cancelBtn.textContent='Cancel';
+  cancelBtn.onclick=function(){renderLoans();};
+  r2.appendChild(saveBtn); r2.appendChild(cancelBtn);
+
+  row.appendChild(nameInp);
+  row.appendChild(r1);
+  row.appendChild(qRow);
+  row.appendChild(r2);
+};
+
+window.addLoan = function() {
+  const name  = document.getElementById('loan-name').value.trim();
+  const total = parseFloat(document.getElementById('loan-total').value)||0;
+  const paid  = parseFloat(document.getElementById('loan-paid').value)||0;
+  const type  = document.getElementById('loan-type').value;
+  if (!name||!total) { toast('Enter loan name and total amount', true); return; }
+  loans.push({name, type, total, paid:Math.min(paid,total)});
+  saveLoans(); renderLoans();
+  document.getElementById('loan-name').value='';
+  document.getElementById('loan-total').value='';
+  document.getElementById('loan-paid').value='';
+  toast('Loan added ✓');
+};
+
+window.delLoan = function(i) {
+  if (confirm('Delete "'+loans[i].name+'"?')) { loans.splice(i,1); saveLoans(); renderLoans(); }
+};
+
+renderLoans();
+
 function renderFinances() {
   let inc=0, exp=0;
   transactions.forEach(t => t.type==='income' ? inc+=t.amt : exp+=t.amt);
@@ -2129,7 +2313,7 @@ function renderAll(){
   chores=loadChores(); renderChoreList('chore-list'); renderChoreList('dash-chores');
   schedItems=get(SCHED_KEY)||schedItems; renderScheduleList();
   calEvents=get(CAL_KEY)||calEvents; renderCalendar(); renderDashSchedule();
-  transactions=get(FIN_KEY)||transactions; salaryData=get(SAL_KEY)||salaryData; renderFinances();
+  transactions=get(FIN_KEY)||transactions; salaryData=get(SAL_KEY)||salaryData; loans=get(LOANS_KEY)||loans; renderFinances(); renderLoans();
   nutrGoals=get(NUTR_KEY)||nutrGoals; foods=get(DIET_KEY)||foods; renderDiet();
   workouts=get(FIT_KEY)||workouts; renderFitness();
   goals=get(GOALS_KEY)||goals; renderGoals();
