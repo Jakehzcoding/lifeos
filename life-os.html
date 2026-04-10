@@ -193,12 +193,12 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 .proj-card{background:var(--s1);border:1px solid var(--b1);border-radius:14px;padding:16px 18px;margin-bottom:14px}
 
 /* Heatmap */
-.hm-wrap{display:flex;gap:6px;flex-wrap:wrap}
+.hm-wrap{display:flex;gap:10px;flex-wrap:wrap}
 .hm-month{display:flex;flex-direction:column;gap:2px}
-.hm-month-label{font-size:10px;font-family:var(--mono);color:var(--muted);margin-bottom:3px;text-align:center}
-.hm-grid{display:grid;grid-template-columns:repeat(7,13px);gap:2px}
-.hm-cell{width:13px;height:13px;border-radius:3px;cursor:pointer;transition:opacity .1s}
-.hm-cell:hover{opacity:.6}
+.hm-month-label{font-size:10px;font-family:var(--mono);color:var(--muted);margin-bottom:5px;text-align:center;letter-spacing:.05em}
+.hm-grid{display:grid;grid-template-columns:repeat(7,16px);gap:2px}
+.hm-cell{width:16px;height:16px;border-radius:3px;cursor:pointer;transition:all .1s;border:1px solid rgba(255,255,255,0.06)}
+.hm-cell:hover{opacity:.7;transform:scale(1.2)}
 
 @media(max-width:768px){
   .sidebar{display:none}
@@ -2144,7 +2144,7 @@ function renderJournalHeatmap(){
       const hasEntry=ds in rMap||(get(jKey(ds))!==null&&get(jKey(ds))!==undefined);
       const r=rMap[ds]||0;
       const isToday=ds===TODAY;
-      html+='<div class="hm-cell" data-date="'+ds+'" style="background:'+(hasEntry?RC[r]||RC[0]:'var(--s3)')+(isToday?';outline:1.5px solid var(--g)':'')+'" onclick="openJDetail(\''+ds+'\')" title="'+ds+(r?' · '+r+'/5 '+RL[r]:'')+'"></div>';
+      html+='<div class="hm-cell" data-date="'+ds+'" style="background:'+(hasEntry?(RC[r]||RC[0]):'rgba(255,255,255,0.04)')+(isToday?';outline:2px solid var(--g)':'')+'" onclick="openJDetail(\''+ds+'\')" title="'+ds+(r?' · '+RC_EMOJI[r]+' '+RL[r]:'')+'"></div>';
     }
     html+='</div></div>';
   }
@@ -2308,8 +2308,8 @@ function renderYearWrap(){
       const cell=document.createElement('div');
       cell.className='hm-cell';
       cell.dataset.date=d.date;
-      cell.style.background=d.hasEntry?(RC[d.rating]||RC[0]):'var(--s3)';
-      if(d.date===TODAY) cell.style.outline='1.5px solid var(--g)';
+      cell.style.background=d.hasEntry?(RC[d.rating]||RC[0]):'rgba(255,255,255,0.04)';
+      if(d.date===TODAY){cell.style.outline='2px solid var(--g)';cell.style.zIndex='1';}
       cell.title=d.date+(d.rating?' · '+RC_EMOJI[d.rating]+' '+RL[d.rating]:'')+(d.morning?' · has entry':'');
       cell.onclick=(function(ds){return function(){ openYWDay(ds); };})(d.date);
       mGrid.appendChild(cell);
