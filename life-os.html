@@ -861,6 +861,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 </div>
 
 <script>
+const RC={0:'#2a2a2e',1:'#f26e6e',2:'#7eb8f2',3:'#f2c97e'};
+const RC_TEXT={1:'#f26e6e',2:'#7eb8f2',3:'#f2c97e'};
+const RL={0:'',1:'bad day',2:'normal day',3:'great day'};
+const RC_EMOJI={0:'',1:'●',2:'●',3:'●'};
 // ═══════════════════════════════════════════════════════
 // STORAGE
 // ═══════════════════════════════════════════════════════
@@ -1055,6 +1059,7 @@ document.querySelectorAll('.nav-item, .bn-item').forEach(el => {
   });
 });
 
+let ywYear = NOW.getFullYear();
 // ═══════════════════════════════════════════════════════
 // HABITS
 // ═══════════════════════════════════════════════════════
@@ -1656,6 +1661,21 @@ renderCalendar();
 const FIN_KEY = 'lo_finance';
 const SAL_KEY = 'lo_salary';
 const BILLS_KEY = 'lo_bills';
+function renderSnap() {
+  const fmt = n => '$' + Math.round(n).toLocaleString();
+  const s = document.getElementById('snap-savings');
+  const r = document.getElementById('snap-retirement');
+  const p = document.getElementById('snap-portfolio');
+  const nw = document.getElementById('snap-networth');
+  const upd = document.getElementById('snap-updated');
+  if(s) s.textContent = fmt(snapData.savings||0);
+  if(r) r.textContent = fmt(snapData.retirement||0);
+  if(p) p.textContent = fmt(snapData.portfolio||0);
+  const netWorth = (snapData.savings||0) + (snapData.retirement||0) + (snapData.portfolio||0);
+  if(nw) nw.textContent = fmt(netWorth);
+  if(upd) upd.textContent = snapData.updated ? 'updated ' + snapData.updated : 'not set';
+}
+renderSnap();
 const SNAP_KEY = 'lo_snap';
 let snapData = get(SNAP_KEY) || { savings:0, retirement:0, portfolio:0, updated:'' };
 function saveSnap() {
@@ -1677,21 +1697,7 @@ window.editSnap = function(field) {
   wrap.style.display = 'block';
   document.getElementById('snap-edit-inp').focus();
 };
-function renderSnap() {
-  const fmt = n => '$' + Math.round(n).toLocaleString();
-  const s = document.getElementById('snap-savings');
-  const r = document.getElementById('snap-retirement');
-  const p = document.getElementById('snap-portfolio');
-  const nw = document.getElementById('snap-networth');
-  const upd = document.getElementById('snap-updated');
-  if(s) s.textContent = fmt(snapData.savings||0);
-  if(r) r.textContent = fmt(snapData.retirement||0);
-  if(p) p.textContent = fmt(snapData.portfolio||0);
-  const netWorth = (snapData.savings||0) + (snapData.retirement||0) + (snapData.portfolio||0);
-  if(nw) nw.textContent = fmt(netWorth);
-  if(upd) upd.textContent = snapData.updated ? 'updated ' + snapData.updated : 'not set';
-}
-renderSnap();
+
 
 let transactions = get(FIN_KEY) || [];
 function saveTransactions() { set(FIN_KEY, transactions); }
@@ -2502,10 +2508,6 @@ function renderTextBlock(text,badgeId,displayId,formId,editFn){
   }
 }
 
-const RC={0:'#2a2a2e',1:'#f26e6e',2:'#7eb8f2',3:'#f2c97e'};
-const RC_TEXT={1:'#f26e6e',2:'#7eb8f2',3:'#f2c97e'};
-const RL={0:'',1:'bad day',2:'normal day',3:'great day'};
-const RC_EMOJI={0:'',1:'●',2:'●',3:'●'};
 function renderRating(){
   const e=loadJournal(TODAY);
   const r=e.rating||0;
@@ -2616,7 +2618,7 @@ function allJournalDates(){
   return Array.from(seen).sort().reverse();
 }
 
-window.setJournalView=function(v){
+function setJournalView(v){
   journalViewMode=v;
   document.getElementById('jv-year').style.display=v==='year'?'block':'none';
   document.getElementById('jv-list').style.display=v==='list'?'block':'none';
@@ -2682,7 +2684,7 @@ function renderJournalList(){
   document.getElementById('journal-list').innerHTML=html;
 }
 
-window.openJDetail=function(d){
+function openJDetail(d){
   const e=loadJournal(d);
   const dt=new Date(d+'T12:00:00');
   const dn=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][dt.getDay()];
@@ -2705,7 +2707,7 @@ window.openJDetail=function(d){
   document.getElementById('jd-content').innerHTML=html;
   document.getElementById('jv-detail').style.display='block';
 };
-window.closeJDetail=function(){
+function closeJDetail(){
   document.getElementById('jv-detail').style.display='none';
   if(journalViewMode==='year')document.getElementById('jv-year').style.display='block';
   else document.getElementById('jv-list').style.display='block';
@@ -2714,14 +2716,13 @@ window.closeJDetail=function(){
 // ═══════════════════════════════════════════════════════
 // YEAR WRAP
 // ═══════════════════════════════════════════════════════
-let ywYear=NOW.getFullYear();
-window.ywNav=function(dir){ywYear+=dir;renderYearWrap();};
+function ywNav(dir){ywYear+=dir;renderYearWrap();}
 
-window.closeYWDay = function() {
+function closeYWDay() {
   document.getElementById('yw-day-panel').style.display = 'none';
 };
 
-window.openYWDay = function(ds) {
+function openYWDay(ds) {
   const panel = document.getElementById('yw-day-panel');
   const titleEl = document.getElementById('yw-day-title');
   const contentEl = document.getElementById('yw-day-content');
@@ -2816,7 +2817,7 @@ function renderYWDayContent(ds) {
   contentEl.appendChild(el);
 }
 
-window.editYWGrat = function(ds, field) {
+function editYWGrat(ds, field) {
   const e = loadJournal(ds);
   const items = e[field] || ['',''];
   const panel = document.createElement('div');
@@ -2841,7 +2842,7 @@ window.editYWGrat = function(ds, field) {
   contentEl.appendChild(panel);
 };
 
-window.editYWText = function(ds, field) {
+function editYWText(ds, field) {
   const e = loadJournal(ds);
   const labels = {morning:'Morning intentions…', evening:'How did the day go? Thoughts, feelings…'};
   const ta = document.createElement('textarea');
