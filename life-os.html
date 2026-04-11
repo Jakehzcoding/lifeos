@@ -411,12 +411,12 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 
 <!-- ═══ CHORES ═══ -->
 <div class="page" id="page-chores">
-  <div class="ph"><div><div class="pt">Chores</div><div class="ps">resets every morning</div></div></div>
+  <div class="ph"><div><div class="pt">Chores</div><div class="ps">tap days to schedule · resets daily</div></div></div>
   <div class="card">
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Tap the day buttons to schedule each chore. The dashboard shows today's chores automatically.</div>
     <div id="chore-list"></div>
     <div class="form-row">
       <input class="inp inp-flex" id="new-chore" placeholder="Add chore…">
-      <select class="inp" id="chore-freq" style="width:105px"><option>daily</option><option>weekly</option><option>monthly</option></select>
       <button class="btn" onclick="addChore()">Add</button>
     </div>
   </div>
@@ -1166,37 +1166,86 @@ renderDashHabits();
 // ═══════════════════════════════════════════════════════
 // CHORES
 // ═══════════════════════════════════════════════════════
-const CHORE_KEY = 'lo_chores_v2';
+const CHORE_KEY = 'lo_chores_v3';
 function loadChores() {
   const d = get(CHORE_KEY);
-  if (Array.isArray(d)) return d;
-  return [
-    {text:'Vacuum living room', freq:'weekly', doneDate:null},
-    {text:'Take out trash',     freq:'daily',  doneDate:null},
-    {text:'Clean bathroom',     freq:'weekly', doneDate:null},
-    {text:'Do laundry',         freq:'weekly', doneDate:null},
+  if (Array.isArray(d) && d.length && Array.isArray(d[0].scheduledDays)) return d;
+  // Migrate old chores or load defaults
+  const old = get('lo_chores_v2');
+  const defaults = [
+    {text:'Vacuum living room', scheduledDays:[6],       doneDate:null},
+    {text:'Take out trash',     scheduledDays:[0,3],     doneDate:null},
+    {text:'Clean bathroom',     scheduledDays:[6],       doneDate:null},
+    {text:'Do laundry',         scheduledDays:[6],       doneDate:null},
   ];
+  if (Array.isArray(old) && old.length) {
+    return old.map(function(c) {
+      return {text:c.text, scheduledDays:[], doneDate:c.doneDate||null};
+    });
+  }
+  return defaults;
 }
 let chores = loadChores();
 function saveChores() { set(CHORE_KEY, chores); }
 function choreIsDone(c) { return c.doneDate === TODAY; }
+function choreScheduledToday(c) { return c.scheduledDays && c.scheduledDays.indexOf(TODAY_IDX) !== -1; }
 
+// Render full chore list with day selectors (chores page)
 function renderChoreList(elId) {
   const el = document.getElementById(elId);
   if (!el) return;
-  if (!chores.length) { el.innerHTML = '<div class="empty">No chores yet</div>'; return; }
-  const sorted = chores.map((c,i) => ({c,i})).sort((a,b) => choreIsDone(a.c) - choreIsDone(b.c));
-  el.innerHTML = sorted.map(({c,i}) => {
-    const done = choreIsDone(c);
-    return '<div class="chore-row">'
-      + '<div class="chore-check' + (done?' done':'') + '" onclick="toggleChore(' + i + ')">' + (done?'✓':'') + '</div>'
-      + '<div class="chore-label' + (done?' done':'') + '" onclick="toggleChore(' + i + ')">' + c.text + '</div>'
-      + '<div class="tag">' + c.freq + '</div>'
-      + '<div class="chore-done-badge' + (done?' show':'') + '">done</div>'
-      + (elId === 'chore-list' ? '<span class="del" onclick="delChore(' + i + ')">✕</span>' : '')
-      + '</div>';
-  }).join('');
+
+  if (elId === 'chore-list') {
+    // Full list with day pickers
+    if (!chores.length) { el.innerHTML = '<div class="empty">No chores yet</div>'; return; }
+    el.innerHTML = chores.map(function(c, i) {
+      const days = DAY_NAMES.map(function(dn, di) {
+        const on = c.scheduledDays && c.scheduledDays.indexOf(di) !== -1;
+        const isToday2 = di === TODAY_IDX;
+        return '<div class="hday' + (isToday2?' today-col':'') + '" style="'
+          + (on?'background:var(--a);color:#0f0f11;font-weight:600;border-color:var(--a)':'')
+          + '" onclick="toggleChoreDay(' + i + ',' + di + ')">' + dn[0] + '</div>';
+      }).join('');
+      const scheduledToday2 = choreScheduledToday(c);
+      return '<div style="padding:10px 0;border-bottom:1px solid var(--b1)">'
+        + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">'
+        + '<div style="font-size:13px;flex:1">' + c.text
+        + (scheduledToday2 ? ' <span style="font-size:9px;background:rgba(242,201,126,.15);color:var(--a);padding:1px 5px;border-radius:3px;font-family:var(--mono)">today</span>' : '')
+        + '</div>'
+        + '<span class="del" onclick="delChore(' + i + ')">✕</span></div>'
+        + '<div style="display:flex;gap:4px">' + days + '</div>'
+        + '</div>';
+    }).join('');
+    return;
+  }
+
+  // Dashboard: only show today's chores
+  if (elId === 'dash-chores') {
+    const todayChores = chores.map(function(c,i){return{c,i};}).filter(function(x){ return choreScheduledToday(x.c); });
+    todayChores.sort(function(a,b){ return choreIsDone(a.c) - choreIsDone(b.c); });
+    if (!todayChores.length) {
+      el.innerHTML = '<div class="empty">No chores today — schedule them in Chores</div>';
+      return;
+    }
+    el.innerHTML = todayChores.map(function(x) {
+      const c = x.c; const i = x.i;
+      const done = choreIsDone(c);
+      return '<div class="chore-row">'
+        + '<div class="chore-check' + (done?' done':'') + '" onclick="toggleChore(' + i + ')">' + (done?'✓':'') + '</div>'
+        + '<div class="chore-label' + (done?' done':'') + '" onclick="toggleChore(' + i + ')">' + c.text + '</div>'
+        + '<div class="chore-done-badge' + (done?' show':'') + '">done</div>'
+        + '</div>';
+    }).join('');
+  }
 }
+
+window.toggleChoreDay = function(i, di) {
+  if (!chores[i].scheduledDays) chores[i].scheduledDays = [];
+  const idx = chores[i].scheduledDays.indexOf(di);
+  if (idx !== -1) chores[i].scheduledDays.splice(idx, 1);
+  else chores[i].scheduledDays.push(di);
+  saveChores(); renderChoreList('chore-list'); renderChoreList('dash-chores');
+};
 
 window.toggleChore = function(i) {
   chores[i].doneDate = choreIsDone(chores[i]) ? null : TODAY;
@@ -1208,9 +1257,8 @@ window.toggleChore = function(i) {
 };
 window.addChore = function() {
   const v = document.getElementById('new-chore').value.trim();
-  const f = document.getElementById('chore-freq').value;
   if (!v) return;
-  chores.push({text:v, freq:f, doneDate:null});
+  chores.push({text:v, scheduledDays:[], doneDate:null});
   saveChores(); renderChoreList('chore-list'); renderChoreList('dash-chores');
   document.getElementById('new-chore').value = '';
   toast('Chore added ✓');
@@ -2926,8 +2974,9 @@ function renderYearWrap(){
 // DASHBOARD STATS
 // ═══════════════════════════════════════════════════════
 function updateDashStats(){
-  const done=chores.filter(c=>choreIsDone(c)).length;
-  const total=chores.length;
+  const todayChores = chores.filter(function(c){ return choreScheduledToday(c); });
+  const done = todayChores.filter(function(c){ return choreIsDone(c); }).length;
+  const total = todayChores.length;
   const el=document.getElementById('ds-chores');
   if(el) el.textContent=done+'/'+total;
 }
@@ -2938,7 +2987,7 @@ updateDashStats();
 // ═══════════════════════════════════════════════════════
 function renderAll(){
   habits=loadHabits(); renderHabitList(); renderDashHabits();
-  chores=loadChores(); renderChoreList('chore-list'); renderChoreList('dash-chores');
+  chores=loadChores(); renderChoreList('chore-list'); renderChoreList('dash-chores'); updateDashStats();
   tasks=get(TASKS_KEY)||tasks; renderDashTasks(); renderTasksPage();
   schedItems=get(SCHED_KEY)||schedItems; renderScheduleList();
   calEvents=get(CAL_KEY)||calEvents; renderCalendar(); renderDashSchedule();
